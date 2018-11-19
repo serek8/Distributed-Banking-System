@@ -30,8 +30,8 @@ trait AccountRoutes extends JsonSupport {
     pathPrefix("accounts") {
       post {
         entity(as[Create]) { create =>
-          val accountCreated: Future[Status] =
-            (bankAccountActorsCluster ? MessageWithId(create.accountNumber, Create(create.accountNumber))).mapTo[Status]
+          val accountCreated: Future[OperationOutcome] =
+            (bankAccountActorsCluster ? MessageWithId(create.accountNumber, Create(create.accountNumber))).mapTo[OperationOutcome]
 
           onSuccess(accountCreated) {
             _ => complete(StatusCodes.NoContent)
@@ -41,13 +41,13 @@ trait AccountRoutes extends JsonSupport {
         pathPrefix(Segment) { accountNumber =>
           path("balance") {
             get {
-              val balanceRetrieved: Future[Status] =
-                (bankAccountActorsCluster ? MessageWithId(accountNumber, GetBalance)).mapTo[Status]
+              val balanceRetrieved: Future[OperationOutcome] =
+                (bankAccountActorsCluster ? MessageWithId(accountNumber, GetBalance)).mapTo[OperationOutcome]
 
               onSuccess(balanceRetrieved) {
-                case performed: Success =>
-                  complete(performed.result)
-                case _: Failure =>
+                case OperationSuccess(result) =>
+                  complete(result)
+                case OperationFailure(_) =>
                   complete(StatusCodes.NotFound)
               }
             }
@@ -61,13 +61,13 @@ trait AccountRoutes extends JsonSupport {
             path("deposit") {
               post {
                 entity(as[Deposit]) { deposit =>
-                  val moneyDeposited: Future[Status] =
-                    (bankAccountActorsCluster ? MessageWithId(accountNumber, Deposit(deposit.amount))).mapTo[Status]
+                  val moneyDeposited: Future[OperationOutcome] =
+                    (bankAccountActorsCluster ? MessageWithId(accountNumber, Deposit(deposit.amount))).mapTo[OperationOutcome]
 
                   onSuccess(moneyDeposited) {
-                    case performed: Success =>
+                    case OperationSuccess(_) =>
                       complete(StatusCodes.NoContent)
-                    case _: Failure =>
+                    case OperationFailure(_) =>
                       complete(StatusCodes.NotFound)
                   }
                 }

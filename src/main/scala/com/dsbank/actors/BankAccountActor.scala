@@ -12,11 +12,11 @@ object BankAccountActor {
 
   final case object GetBalance
 
-  trait Status
+  trait OperationOutcome
 
-  final case class Success(result: String) extends Status
+  final case class OperationSuccess(result: String) extends OperationOutcome
 
-  final case class Failure(reason: String) extends Status
+  final case class OperationFailure(reason: String) extends OperationOutcome
 
 }
 
@@ -30,30 +30,30 @@ class BankAccountActor extends Actor with ActorLogging {
   def receive: Receive = {
     case Create(accountNumber) =>
       active = true
-      sender() ! Success("Bank account created")
+      sender() ! OperationSuccess("Bank account created")
     case GetBalance =>
       if (!active) {
-        sender() ! Failure("Account doesn't exist") // TODO: Interceptor
+        sender() ! OperationFailure("Account doesn't exist") // TODO: Interceptor
       } else {
-        sender() ! Success(balance.toString)
+        sender() ! OperationSuccess(balance.toString)
       }
     case Withdraw(amount) =>
       if (!active) {
-        sender() ! Failure("Account doesn't exist") // TODO: Interceptor
+        sender() ! OperationFailure("Account doesn't exist") // TODO: Interceptor
       } else {
         if (balance >= amount) {
           balance -= amount
-          sender() ! Success(s"$amount withdrawn successfully.")
+          sender() ! OperationSuccess(s"$amount withdrawn successfully.")
         } else {
-          sender() ! Failure("Insufficient balance.")
+          sender() ! OperationFailure("Insufficient balance.")
         }
       }
     case Deposit(amount) =>
       if (!active) {
-        sender() ! Failure("Account doesn't exist") // TODO: Interceptor
+        sender() ! OperationFailure("Account doesn't exist") // TODO: Interceptor
       } else {
         balance += amount
-        sender() ! Success(s"$amount deposited successfully.")
+        sender() ! OperationSuccess(s"$amount deposited successfully.")
       }
   }
 }
