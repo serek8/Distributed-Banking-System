@@ -1,6 +1,7 @@
 package com.dsbank.actors
 
-import akka.actor.{Actor, ActorLogging}
+import akka.actor.{ActorLogging}
+import akka.persistence.PersistentActor
 
 object BankAccountActor {
 
@@ -20,40 +21,63 @@ object BankAccountActor {
 
 }
 
-class BankAccountActor extends Actor with ActorLogging {
+trait BankAccountEvent
+case class BalanceIncreased(amount: Long) extends BankAccountEvent
+case class BalanceDecreased(amount: Long) extends BankAccountEvent
+case class AccountCreated() extends BankAccountEvent
+
+class BankAccountActor extends PersistentActor with ActorLogging {
 
   import BankAccountActor._
+
+  override def persistenceId: String = self.path.name
 
   var balance: Long = 0
   var active = false
 
-  def receive: Receive = {
-    case Create(accountNumber) =>
-      active = true
-      sender() ! OperationSuccess("Bank account created")
+  def updateState(event: BankAccountEvent): Unit = event match {
+    case AccountCreated() => active = true
+    case BalanceIncreased(amount) => balance += amount
+    case BalanceDecreased(amount) => balance -= amount
+  }
+
+  val receiveRecover: Receive = {
+    case evt: BankAccountEvent => updateState(evt)
+  }
+
+  val receiveCommand: Receive = {
+    case Create(_) =>
+      persist(AccountCreated())(e => {
+        updateState(e)
+        sender() ! OperationSuccess("Bank account created")
+      })
     case GetBalance =>
       if (!active) {
-        sender() ! OperationFailure("Account doesn't exist") // TODO: Interceptor
+        sender() ! OperationFailure("Account doesn't exist")
       } else {
         sender() ! OperationSuccess(balance.toString)
       }
     case Withdraw(amount) =>
       if (!active) {
-        sender() ! OperationFailure("Account doesn't exist") // TODO: Interceptor
+        sender() ! OperationFailure("Account doesn't exist")
       } else {
         if (balance >= amount) {
-          balance -= amount
-          sender() ! OperationSuccess(s"$amount withdrawn successfully.")
+          persist(BalanceDecreased(amount))(e => {
+            updateState(e)
+            sender() ! OperationSuccess(s"$amount withdrawn successfully.")
+          })
         } else {
           sender() ! OperationFailure("Insufficient balance.")
         }
       }
     case Deposit(amount) =>
       if (!active) {
-        sender() ! OperationFailure("Account doesn't exist") // TODO: Interceptor
+        sender() ! OperationFailure("Account doesn't exist")
       } else {
-        balance += amount
-        sender() ! OperationSuccess(s"$amount deposited successfully.")
+        persist(BalanceIncreased(amount))(e => {
+          updateState(e)
+          sender() ! OperationSuccess(s"$amount deposited successfully.")
+        })
       }
   }
 }
