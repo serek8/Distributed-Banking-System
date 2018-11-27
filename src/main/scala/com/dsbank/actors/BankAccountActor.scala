@@ -3,7 +3,6 @@ package com.dsbank.actors
 import akka.actor.{Actor, ActorLogging, ActorRef}
 import com.dsbank.Remote.MessageWithId
 
-
 object BankAccountActor {
 
   final case class Create(accountNumber: String)
@@ -15,6 +14,7 @@ object BankAccountActor {
   final case class Interest(constant: Long)
 
   final case class Transfer(bankAccountCluster: ActorRef, accountNumberDestination: String, amount: Long)
+
   final case class TransferAPI(accountNumberDestination: String, amount: Long)
 
   final case object GetBalance
@@ -49,7 +49,7 @@ class BankAccountActor extends Actor with ActorLogging {
         sender() ! OperationFailure("Account doesn't exist") // TODO: Interceptor
       } else {
         if (balance >= amount) {
-          balance = balance - amount
+          balance -= amount
           sender() ! OperationSuccess(s"$amount withdrawn successfully.")
         } else {
           sender() ! OperationFailure("Insufficient balance.")
@@ -62,6 +62,13 @@ class BankAccountActor extends Actor with ActorLogging {
         balance += amount
         sender() ! OperationSuccess(s"$amount deposited successfully.")
       }
+    case Interest(constant) =>
+      if (balance > 0) {
+        balance = balance + (balance*constant*0.01).toLong
+        sender() ! OperationSuccess("The interest has been applied successfully")
+      } else {
+        sender() ! OperationFailure("Insufficient funds")
+      }
     case Transfer(bankAccountCluster, accountNumberDestination, amount) =>
       if (amount <= balance) {
         balance = balance - amount
@@ -69,14 +76,6 @@ class BankAccountActor extends Actor with ActorLogging {
         sender() ! OperationSuccess(s"transfer deposited successfully.")
       }
       else {
-        sender() ! OperationFailure(s"Not enough funds.")
-      }
-    case Interest(constant) =>
-      if (!active) {
-        balance =  (balance * constant * 0.01).toLong
-        sender() ! OperationSuccess(s"Interest applied successfully.")
-      }
-      else{
         sender() ! OperationFailure(s"Not enough funds.")
       }
   }

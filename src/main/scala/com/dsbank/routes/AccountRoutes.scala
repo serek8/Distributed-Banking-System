@@ -23,7 +23,6 @@ trait AccountRoutes extends JsonSupport {
 
   def bankAccountActorsCluster: ActorRef
 
-
   implicit lazy val timeout = Timeout(5.seconds)
 
   lazy val accountRoutes: Route =
@@ -38,7 +37,8 @@ trait AccountRoutes extends JsonSupport {
           }
         }
       } ~
-        pathPrefix(Segment) { accountNumber =>
+        pathPrefix(Segment) {
+          accountNumber =>
           path("balance") {
             get {
               val balanceRetrieved: Future[OperationOutcome] =
@@ -51,70 +51,70 @@ trait AccountRoutes extends JsonSupport {
                   complete(StatusCodes.NotFound)
               }
             }
-          } ~
-            path("withdraw") {
-              post {
-                entity(as[Withdraw]) { withdraw =>
-                  val moneyWithdrawn: Future[OperationOutcome] =
-                    (bankAccountActorsCluster ? MessageWithId(accountNumber, Withdraw(withdraw.amount))).mapTo[OperationOutcome]
-                  onSuccess(moneyWithdrawn) {
-                    case OperationSuccess(_) =>
-                      complete(StatusCodes.NoContent)
-                    case OperationFailure(_) =>
-                      complete(StatusCodes.NotFound)
-                  }
-                }
-              }
-            } ~
-            path("deposit") {
-              post {
-                entity(as[Deposit]) { deposit =>
-                  val moneyDeposited: Future[OperationOutcome] =
-                    (bankAccountActorsCluster ? MessageWithId(accountNumber, Deposit(deposit.amount))).mapTo[OperationOutcome]
+          }~
+          path("withdraw") {
+            post {
+              entity(as[Withdraw]) { withdraw =>
+                val moneyWithdrawn: Future[OperationOutcome] =
+                  (bankAccountActorsCluster ? MessageWithId(accountNumber, Withdraw(withdraw.amount))).mapTo[OperationOutcome]
 
-                  onSuccess(moneyDeposited) {
-                    case OperationSuccess(_) =>
-                      complete(StatusCodes.NoContent)
-                    case OperationFailure(_) =>
-                      complete(StatusCodes.NotFound)
-                  }
-                }
-              }
-            } ~
-            path("interest") {
-              println("router interest")
-              post {
-                entity(as[Interest]) { interest =>
-                  val moneyDeposited: Future[OperationOutcome] =
-                    (bankAccountActorsCluster ? MessageWithId(accountNumber, Interest(interest.constant)))
-                      .mapTo[OperationOutcome]
-                  onSuccess(moneyDeposited) {
-                    case OperationSuccess(_) =>
-                      complete(StatusCodes.NoContent)
-                    case OperationFailure(_) =>
-                      complete(StatusCodes.NotFound)
-                  }
-                }
-              }
-            } ~
-            path("transfer") {
-              post {
-                entity(as[TransferAPI]) { transfer =>
-                  val moneyDeposited: Future[OperationOutcome] =
-                    (bankAccountActorsCluster ? MessageWithId(
-                      accountNumber,
-                      Transfer(bankAccountActorsCluster, transfer.accountNumberDestination, transfer.amount)))
-                      .mapTo[OperationOutcome]
-
-                  onSuccess(moneyDeposited) {
-                    case OperationSuccess(_) =>
-                      complete(StatusCodes.NoContent)
-                    case OperationFailure(_) =>
-                      complete(StatusCodes.NotFound)
-                  }
+                onSuccess(moneyWithdrawn) {
+                  case OperationSuccess(_) =>
+                    complete(StatusCodes.NoContent)
+                  case OperationFailure(_) =>
+                    complete(StatusCodes.NotFound)
                 }
               }
             }
+          }~
+          path("interest") {
+            post {
+              entity(as[Interest]) { interest =>
+                val moneyInterest: Future[OperationOutcome] =
+                  (bankAccountActorsCluster ? MessageWithId(accountNumber, Interest(interest.constant))).mapTo[OperationOutcome]
+
+                onSuccess(moneyInterest) {
+                  case OperationSuccess(_) =>
+                    complete(StatusCodes.NoContent)
+                  case OperationFailure(_) =>
+                    complete(StatusCodes.NotFound)
+                }
+              }
+            }
+          }~
+          path("deposit") {
+            post {
+              entity(as[Deposit]) { deposit =>
+                val moneyDeposited: Future[OperationOutcome] =
+                  (bankAccountActorsCluster ? MessageWithId(accountNumber, Deposit(deposit.amount))).mapTo[OperationOutcome]
+
+                onSuccess(moneyDeposited) {
+                  case OperationSuccess(_) =>
+                    complete(StatusCodes.NoContent)
+                  case OperationFailure(_) =>
+                    complete(StatusCodes.NotFound)
+                }
+              }
+            }
+          }~
+          path("transfer") {
+            post {
+              entity(as[TransferAPI]) { transfer =>
+                val moneyTransferred: Future[OperationOutcome] =
+                  (bankAccountActorsCluster ? MessageWithId(
+                    accountNumber,
+                    Transfer(bankAccountActorsCluster, transfer.accountNumberDestination, transfer.amount)))
+                    .mapTo[OperationOutcome]
+
+                onSuccess(moneyTransferred) {
+                  case OperationSuccess(_) =>
+                    complete(StatusCodes.NoContent)
+                  case OperationFailure(_) =>
+                    complete(StatusCodes.NotFound)
+                }
+              }
+            }
+          }
         }
     }
 }
