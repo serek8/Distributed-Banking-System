@@ -6,7 +6,7 @@ Our [configuration](src/main/resources/application.conf) requires two seed nodes
 ## Cassandra
 ### Requirements
 * [Docker Compose](https://docs.docker.com/compose/install/)
-* It is recommended to allocate around 1GB of memory per 1 Cassandra node (we have 3 nodes, so best would be to allocate 3GB). [Docker's Advanced Settings](https://docs.docker.com/docker-for-windows/#shared-drives) is the right place to set the memory allocation limits.
+* It is recommended to allocate around 1GB of memory per 1 Cassandra node (we have 3 nodes, so best would be to allocate 3GB). [Docker's Advanced Settings](https://docs.docker.com/docker-for-windows/#advanced) is the right place to set the memory allocation limits.
 
 ### Getting started
 To create/run a 3-node Cassandra cluster, please run the following command in the project directory:
