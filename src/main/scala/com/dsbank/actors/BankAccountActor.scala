@@ -1,6 +1,8 @@
 package com.dsbank.actors
 
-import akka.actor.{Actor, ActorLogging}
+import akka.actor.{Actor, ActorLogging, ActorRef}
+import com.dsbank.Remote.MessageWithId
+
 
 object BankAccountActor {
 
@@ -9,6 +11,11 @@ object BankAccountActor {
   final case class Withdraw(amount: Long)
 
   final case class Deposit(amount: Long)
+
+  final case class Interest(constant: Long)
+
+  final case class Transfer(bankAccountCluster: ActorRef, accountNumberDestination: String, amount: Long)
+  final case class TransferAPI(accountNumberDestination: String, amount: Long)
 
   final case object GetBalance
 
@@ -42,7 +49,7 @@ class BankAccountActor extends Actor with ActorLogging {
         sender() ! OperationFailure("Account doesn't exist") // TODO: Interceptor
       } else {
         if (balance >= amount) {
-          balance -= amount
+          balance = balance - amount
           sender() ! OperationSuccess(s"$amount withdrawn successfully.")
         } else {
           sender() ! OperationFailure("Insufficient balance.")
@@ -54,6 +61,23 @@ class BankAccountActor extends Actor with ActorLogging {
       } else {
         balance += amount
         sender() ! OperationSuccess(s"$amount deposited successfully.")
+      }
+    case Transfer(bankAccountCluster, accountNumberDestination, amount) =>
+      if (amount <= balance) {
+        balance = balance - amount
+        bankAccountCluster ! MessageWithId(accountNumberDestination, Deposit(amount))
+        sender() ! OperationSuccess(s"transfer deposited successfully.")
+      }
+      else {
+        sender() ! OperationFailure(s"Not enough funds.")
+      }
+    case Interest(constant) =>
+      if (!active) {
+        balance =  (balance * constant * 0.01).toLong
+        sender() ! OperationSuccess(s"Interest applied successfully.")
+      }
+      else{
+        sender() ! OperationFailure(s"Not enough funds.")
       }
   }
 }
