@@ -23,7 +23,7 @@ trait AccountRoutes extends JsonSupport {
 
   def bankAccountActorsCluster: ActorRef
 
-  implicit lazy val timeout = Timeout(5.seconds)
+  implicit lazy val timeout = Timeout(10.seconds)
 
   lazy val accountRoutes: Route =
     pathPrefix("accounts") {

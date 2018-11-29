@@ -1,22 +1,33 @@
 package com.dsbank.actors
 
 import akka.actor.{ActorLogging, ActorRef}
+import akka.http.scaladsl.model.StatusCodes
+import akka.http.scaladsl.server.Directives.onSuccess
+import akka.http.scaladsl.server.directives.RouteDirectives.complete
 import akka.persistence.PersistentActor
 import com.dsbank.Remote.MessageWithId
+import akka.pattern.ask
+
+import scala.concurrent.duration._
+import akka.util.Timeout
+
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
+import scala.util.{Failure, Success}
 
 object BankAccountActor {
 
   final case class Create(accountNumber: String)
 
-  final case class Withdraw(amount: Long)
+  final case class Withdraw(amount: Float)
 
-  final case class Deposit(amount: Long)
+  final case class Deposit(amount: Float)
 
-  final case class Interest(constant: Long)
+  final case class Interest(constant: Float)
 
-  final case class Transfer(bankAccountCluster: ActorRef, accountNumberDestination: String, amount: Long)
+  final case class Transfer(bankAccountCluster: ActorRef, accountNumberDestination: String, amount: Float)
 
-  final case class TransferAPI(accountNumberDestination: String, amount: Long)
+  final case class TransferAPI(accountNumberDestination: String, amount: Float)
 
   final case object GetBalance
 
@@ -29,17 +40,18 @@ object BankAccountActor {
 }
 
 trait BankAccountEvent
-case class BalanceIncreased(amount: Long) extends BankAccountEvent
-case class BalanceDecreased(amount: Long) extends BankAccountEvent
+case class BalanceIncreased(amount: Float) extends BankAccountEvent
+case class BalanceDecreased(amount: Float) extends BankAccountEvent
 case class AccountCreated() extends BankAccountEvent
 
 class BankAccountActor extends PersistentActor with ActorLogging {
 
+  implicit val timeout: Timeout = Timeout(5 seconds)
   import BankAccountActor._
 
   override def persistenceId: String = self.path.name
 
-  var balance: Long = 0
+  var balance: Float = 0
   var active = false
 
   def updateState(event: BankAccountEvent): Unit = event match {
@@ -71,7 +83,7 @@ class BankAccountActor extends PersistentActor with ActorLogging {
         if (balance >= amount) {
           persist(BalanceDecreased(amount))(e => {
             updateState(e)
-            sender() ! OperationSuccess(s"$amount withdrawn successfully.")
+            sender() ! OperationSuccess("Withdrawn successfully.")
           })
         } else {
           sender() ! OperationFailure("Insufficient balance.")
@@ -83,31 +95,50 @@ class BankAccountActor extends PersistentActor with ActorLogging {
       } else {
         persist(BalanceIncreased(amount))(e => {
           updateState(e)
-          sender() ! OperationSuccess(s"$amount deposited successfully.")
+          sender() ! OperationSuccess("Deposited successfully.")
         })
       }
     case Interest(constant) =>
       if(!active){
         sender() ! OperationFailure("Account doesn't exist")
       } else {
-        persist(BalanceIncreased((balance * constant * 0.01).toLong))(e => {
+        val bankEvent = if(constant > 0) {
+          BalanceIncreased(balance * constant)
+        } else{
+          BalanceDecreased(balance * constant)
+        }
+        persist(bankEvent)(e => {
           updateState(e)
           sender() ! OperationSuccess("The interest has been applied successfully.")
         })
       }
     case Transfer(bankAccountCluster, accountNumberDestination, amount) =>
+
       if(!active){
         sender() ! OperationFailure("Account doesn't exist")
       } else {
         if (amount <= balance) {
           persist(BalanceDecreased(amount))(e => {
             updateState(e)
+//            val moneyDeposit : Future[OperationOutcome] = (bankAccountCluster ? MessageWithId(accountNumberDestination, Deposit(amount))).mapToFuture[OperationOutcome]
+              val moneyDeposited: Future[OperationOutcome] =
+                (bankAccountCluster ? MessageWithId(accountNumberDestination, Deposit(amount))).mapTo[OperationOutcome]
+              moneyDeposited.onComplete {
+              case Success(value) =>
+                value match {
+                  case OperationSuccess(_) => updateState(e)
+                  case OperationFailure(_) => self ! Deposit(amount)
+                }
+              case Failure(ex) =>
+                self ! Deposit(amount)
+                ex.printStackTrace
+            }
             bankAccountCluster ! MessageWithId(accountNumberDestination, Deposit(amount))
             sender() ! OperationSuccess(s"$amount withdrawn successfully.")
           })
         }
         else {
-          sender() ! OperationFailure(s"Not enough funds.")
+          sender() ! OperationFailure("Not enough funds")
         }
       }
   }
