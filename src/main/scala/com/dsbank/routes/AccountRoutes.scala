@@ -33,7 +33,7 @@ trait AccountRoutes extends JsonSupport {
             (bankAccountActorsCluster ? MessageWithId(create.accountNumber, Create(create.accountNumber))).mapTo[OperationOutcome]
 
           onSuccess(accountCreated) {
-            _ => complete(StatusCodes.NoContent)
+            _ => complete(StatusCodes.Created)
           }
         }
       } ~

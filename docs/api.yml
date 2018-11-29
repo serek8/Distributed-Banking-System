@@ -1,0 +1,125 @@
+openapi: "3.0.0"
+info:
+  title: Distributed Bank application
+  version: 1.0.0
+servers:
+- url: http://127.0.0.1:8080
+paths:
+  /accounts:
+    post:
+      summary: Create a bank account
+      operationId: createAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                accountNumber:
+                  type: string
+      responses:
+        '201':
+          description: Account created successfully
+
+  /accounts/{accountNumber}/balance:
+    get:
+      summary: Get a given bank account current balance
+      operationId: getBalance
+      parameters:
+      - name: accountNumber
+        in: path
+        description: Account number
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Balance fetched successfully
+          content:
+            text/plain:
+              schema:
+                type: integer
+        '404':
+          description: Account not found
+
+  /accounts/{accountNumber}/withdraw:
+    post:
+      summary: Withdraw money from a specific bank account
+      operationId: withdrawMoney
+      parameters:
+      - name: accountNumber
+        in: path
+        description: Account number
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  type: integer
+      responses:
+        '204':
+          description: Money withdrawn successfully
+        '404':
+          description: Account not found
+
+  /accounts/{accountNumber}/deposit:
+    post:
+      summary: Deposit money to a specific bank account
+      operationId: depositMoney
+      parameters:
+      - name: accountNumber
+        in: path
+        description: Account number
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  type: integer
+      responses:
+        '204':
+          description: Money deposited successfully
+        '404':
+          description: Account not found
+
+  /accounts/{accountNumber}/transfer:
+    post:
+      summary: Transfer money from one account to another bank account
+      operationId: transferMoney
+      parameters:
+      - name: accountNumber
+        in: path
+        description: Origin account number
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  type: integer
+                accountNumberDestination:
+                  type: string
+                  description: Destination account number
+      responses:
+        '204':
+          description: Money transfered successfully
+        '404':
+          description: Account not found
