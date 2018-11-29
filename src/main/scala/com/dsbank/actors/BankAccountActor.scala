@@ -102,28 +102,22 @@ class BankAccountActor extends PersistentActor with ActorLogging {
       if(!active){
         sender() ! OperationFailure("Account doesn't exist")
       } else {
-        val bankEvent = if(constant > 0) {
-          BalanceIncreased(balance * constant)
-        } else{
-          BalanceDecreased(balance * constant)
-        }
+        val bankEvent = BalanceIncreased(balance * constant) // if constant < 0, then the value will be decreased anyway
         persist(bankEvent)(e => {
           updateState(e)
           sender() ! OperationSuccess("The interest has been applied successfully.")
         })
       }
     case Transfer(bankAccountCluster, accountNumberDestination, amount) =>
-
       if(!active){
         sender() ! OperationFailure("Account doesn't exist")
       } else {
         if (amount <= balance) {
           persist(BalanceDecreased(amount))(e => {
             updateState(e)
-//            val moneyDeposit : Future[OperationOutcome] = (bankAccountCluster ? MessageWithId(accountNumberDestination, Deposit(amount))).mapToFuture[OperationOutcome]
-              val moneyDeposited: Future[OperationOutcome] =
-                (bankAccountCluster ? MessageWithId(accountNumberDestination, Deposit(amount))).mapTo[OperationOutcome]
-              moneyDeposited.onComplete {
+            val moneyDeposited: Future[OperationOutcome] =
+              (bankAccountCluster ? MessageWithId(accountNumberDestination, Deposit(amount))).mapTo[OperationOutcome]
+            moneyDeposited.onComplete {
               case Success(value) =>
                 value match {
                   case OperationSuccess(_) => updateState(e)
@@ -134,7 +128,7 @@ class BankAccountActor extends PersistentActor with ActorLogging {
                 ex.printStackTrace
             }
             bankAccountCluster ! MessageWithId(accountNumberDestination, Deposit(amount))
-            sender() ! OperationSuccess(s"$amount withdrawn successfully.")
+            sender() ! OperationSuccess("Transferred successfully.")
           })
         }
         else {
