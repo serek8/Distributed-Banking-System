@@ -46,7 +46,7 @@ case class AccountCreated() extends BankAccountEvent
 
 class BankAccountActor extends PersistentActor with ActorLogging {
 
-  implicit val timeout: Timeout = Timeout(5 seconds)
+  implicit val timeout: Timeout = Timeout(5.seconds)
   import BankAccountActor._
 
   override def persistenceId: String = self.path.name
