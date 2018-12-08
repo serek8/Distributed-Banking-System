@@ -94,10 +94,13 @@ trait AccountRoutes extends JsonSupport {
           }~
           path("deposit") {
             post {
+              println("Will deposit")
               entity(as[DepositAPI]) { deposit =>
+                println("done - as[DepositAPI]")
                 bankAccountActorsCluster ! MessageWithId(
                   accountNumber,
                   Deposit(getNextClockValue(accountNumber), deposit.amount)
+//                  Deposit(deposit.amount)
                 )
                 complete(StatusCodes.NoContent)
               }
