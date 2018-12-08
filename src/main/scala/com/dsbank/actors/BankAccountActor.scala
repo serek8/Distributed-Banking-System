@@ -120,15 +120,15 @@ class BankAccountActor extends PersistentActor with ActorLogging {
             moneyDeposited.onComplete {
               case Success(value) =>
                 value match {
-                  case OperationSuccess(_) => updateState(e)
+                  case OperationSuccess(_) => sender() ! OperationSuccess("Transferred successfully.")
                   case OperationFailure(_) => self ! Deposit(amount)
                 }
               case Failure(ex) =>
                 self ! Deposit(amount)
                 ex.printStackTrace
             }
-            bankAccountCluster ! MessageWithId(accountNumberDestination, Deposit(amount))
-            sender() ! OperationSuccess("Transferred successfully.")
+            //bankAccountCluster ! MessageWithId(accountNumberDestination, Deposit(amount))
+            //sender() ! OperationSuccess("Transferred successfully.")
           })
         }
         else {
