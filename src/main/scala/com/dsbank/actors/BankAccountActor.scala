@@ -17,19 +17,23 @@ import scala.util.{Failure, Success}
 
 object BankAccountActor {
 
-  final case class Create(accountNumber: String)
+  final case class Create(clock: Int, accountNumber: String)
+  final case class CreateAPI(accountNumber: String)
 
-  final case class Withdraw(amount: Float)
+  final case class Withdraw(clock: Int, amount: Float)
+  final case class WithdrawAPI(amount: Float)
 
-  final case class Deposit(amount: Float)
+  final case class Deposit(clock: Int, amount: Float)
+  final case class DepositAPI(amount: Float)
 
-  final case class Interest(constant: Float)
+  final case class Interest(clock: Int, constant: Float)
+  final case class InterestAPI(constant: Float)
 
-  final case class Transfer(bankAccountCluster: ActorRef, accountNumberDestination: String, amount: Float)
-
+  final case class Transfer(clockWithdraw: Int, clockDeposit: Int, bankAccountCluster: ActorRef, accountNumberDestination: String, amount: Float)
   final case class TransferAPI(accountNumberDestination: String, amount: Float)
 
-  final case object GetBalance
+  final case class GetBalance(clock: Int)
+  final case class GetBalanceAPI()
 
   trait OperationOutcome
 
@@ -65,70 +69,47 @@ class BankAccountActor extends PersistentActor with ActorLogging {
   }
 
   val receiveCommand: Receive = {
-    case Create(_) =>
+    case Create(clock, accountNumber) =>
       persist(AccountCreated())(e => {
         updateState(e)
         sender() ! OperationSuccess("Bank account created")
       })
-    case GetBalance =>
+    case GetBalance(clock) =>
       if (!active) {
         sender() ! OperationFailure("Account doesn't exist")
       } else {
         sender() ! OperationSuccess(balance.toString)
       }
-    case Withdraw(amount) =>
-      if (!active) {
-        sender() ! OperationFailure("Account doesn't exist")
-      } else {
+    case Withdraw(clock, amount) =>
+      if (active) {
         if (balance >= amount) {
           persist(BalanceDecreased(amount))(e => {
             updateState(e)
-            sender() ! OperationSuccess("Withdrawn successfully.")
           })
-        } else {
-          sender() ! OperationFailure("Insufficient balance.")
         }
       }
-    case Deposit(amount) =>
-      if (!active) {
-        sender() ! OperationFailure("Account doesn't exist")
-      } else {
+    case Deposit(clock, amount) =>
+      if (active) {
+        println("Received Key: "+ self.path.name + ":" + clock.toString + "\n")
         persist(BalanceIncreased(amount))(e => {
           updateState(e)
-          sender() ! OperationSuccess("Deposited successfully.")
         })
       }
-    case Interest(constant) =>
-      if(!active){
+    case Interest(clock, constant) =>
+      if(active){
         sender() ! OperationFailure("Account doesn't exist")
-      } else {
         val bankEvent = BalanceIncreased(balance * constant) // if constant < 0, then the value will be decreased anyway
         persist(bankEvent)(e => {
           updateState(e)
-          sender() ! OperationSuccess("The interest has been applied successfully.")
         })
       }
-    case Transfer(bankAccountCluster, accountNumberDestination, amount) =>
-      if(!active){
-        sender() ! OperationFailure("Account doesn't exist")
-      } else {
+    case Transfer(clockWithdraw, clockDeposit, bankAccountCluster, accountNumberDestination, amount) =>
+      if(active){
         if (amount <= balance) {
           persist(BalanceDecreased(amount))(e => {
             updateState(e)
-            val moneyDeposited: Future[OperationOutcome] =
-              (bankAccountCluster ? MessageWithId(accountNumberDestination, Deposit(amount))).mapTo[OperationOutcome]
-            moneyDeposited.onComplete {
-              case Success(value) =>
-                value match {
-                  case OperationSuccess(_) => updateState(e)
-                  case OperationFailure(_) => self ! Deposit(amount)
-                }
-              case Failure(ex) =>
-                self ! Deposit(amount)
-                ex.printStackTrace
-            }
-            bankAccountCluster ! MessageWithId(accountNumberDestination, Deposit(amount))
-            sender() ! OperationSuccess("Transferred successfully.")
+            bankAccountCluster ! MessageWithId(accountNumberDestination, Deposit(clockDeposit, amount))
+            // What is 'accountNumberDestination' isn't created yet?
           })
         }
         else {
