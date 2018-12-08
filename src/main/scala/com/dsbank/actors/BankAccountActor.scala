@@ -2,7 +2,6 @@ package com.dsbank.actors
 
 import java.util.concurrent.atomic.AtomicInteger
 
-//import akka.actor.typed.scaladsl.StashBuffer
 import akka.actor.{ActorLogging, ActorRef, Stash}
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.Directives.onSuccess
@@ -62,7 +61,6 @@ class BankAccountActor extends PersistentActor with ActorLogging {
   var balance: Float = 0
   var active = false
   var clock = new AtomicInteger(0)
-//  val buffer = StashBuffer[Command](capacity = 100)
 
 
   def updateState(event: BankAccountEvent): Unit = event match {
@@ -89,19 +87,15 @@ class BankAccountActor extends PersistentActor with ActorLogging {
         unstashAll()
       }
     case GetBalance(clock) =>
-      printf("in GetBalance, msg_clock:" + clock + ", this.clock:" + this.clock +"\n")
       if(this.clock.get() != clock){
         stash()
       }
       else {
         if (!active) {
-          printf("will Fail")
           sender() ! OperationFailure("Account doesn't exist")
         } else {
-          printf("will success")
           sender() ! OperationSuccess(balance.toString)
         }
-        printf("unshatsh")
         this.clock.incrementAndGet()
         unstashAll()
       }
@@ -122,32 +116,26 @@ class BankAccountActor extends PersistentActor with ActorLogging {
       }
 
     case Deposit(clock, amount) =>
-      println("Deposited")
-      println("Received Deposit:" + amount + "\tmsg_clock:"+clock + "\tthis_clock:" + this.clock)
       if(this.clock.get() != clock){
-        println("Stashed Deposit:" + amount + "\tmsg_clock:"+clock)
         stash()
       }
       else{
         if (active) {
-          println("Received Key: " + self.path.name + ":" + clock.toString + "\n")
           persist(BalanceIncreased(amount))(e => {
             updateState(e)
           })
         }
         this.clock.incrementAndGet()
-        println("Untash Deposit:" + amount + "\tthis_clock:"+this.clock.get())
         unstashAll()
       }
 
     case Interest(clock, constant) =>
-      if(this.clock.get() != clock + 1){
+      if(this.clock.get() != clock){
         stash()
       }
       else {
         if (active) {
-          sender() ! OperationFailure("Account doesn't exist")
-          val bankEvent = BalanceIncreased(balance * constant) // if constant < 0, then the value will be decreased anyway
+          val bankEvent = BalanceIncreased(balance * constant)
           persist(bankEvent)(e => {
             updateState(e)
           })
@@ -165,7 +153,7 @@ class BankAccountActor extends PersistentActor with ActorLogging {
             persist(BalanceDecreased(amount))(e => {
               updateState(e)
               bankAccountCluster ! MessageWithId(accountNumberDestination, Deposit(clockDeposit, amount))
-              // What is 'accountNumberDestination' isn't created yet?
+              // What if 'accountNumberDestination' isn't created yet?
             })
           }
           else {

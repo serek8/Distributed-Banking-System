@@ -35,7 +35,6 @@ trait AccountRoutes extends JsonSupport {
   def getNextClockValue(bankAccount:String) : Int = {
     val currentClock = clockMap.computeIfAbsent(
       bankAccount, (k: String) => new AtomicInteger(0)).getAndIncrement()
-    println("1) Created Key: "+ bankAccount + ":" + currentClock.toString + "\n")
     return currentClock
   }
 
@@ -94,13 +93,10 @@ trait AccountRoutes extends JsonSupport {
           }~
           path("deposit") {
             post {
-              println("Will deposit")
               entity(as[DepositAPI]) { deposit =>
-                println("done - as[DepositAPI]")
                 bankAccountActorsCluster ! MessageWithId(
                   accountNumber,
                   Deposit(getNextClockValue(accountNumber), deposit.amount)
-//                  Deposit(deposit.amount)
                 )
                 complete(StatusCodes.NoContent)
               }
@@ -123,4 +119,10 @@ trait AccountRoutes extends JsonSupport {
           }
         }
     }
+
+  def testClock(): Unit = {
+    bankAccountActorsCluster ! MessageWithId("1", Deposit(1, 200))
+    bankAccountActorsCluster ! MessageWithId("1", Deposit(0, 400))
+    complete(StatusCodes.NoContent)
+  }
 }
