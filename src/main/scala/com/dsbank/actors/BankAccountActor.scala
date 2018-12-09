@@ -1,6 +1,8 @@
 package com.dsbank.actors
 
-import akka.actor.{ActorLogging, ActorRef}
+import java.util.concurrent.atomic.AtomicInteger
+
+import akka.actor.{ActorLogging, ActorRef, Stash}
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.Directives.onSuccess
 import akka.http.scaladsl.server.directives.RouteDirectives.complete
@@ -16,20 +18,25 @@ import scala.concurrent.Future
 import scala.util.{Failure, Success}
 
 object BankAccountActor {
+  trait Command
 
-  final case class Create(accountNumber: String)
+  final case class Create(clock: Int, accountNumber: String)
+  final case class CreateAPI(accountNumber: String)
 
-  final case class Withdraw(amount: Float)
+  final case class Withdraw(clock: Int, amount: Float)
+  final case class WithdrawAPI(amount: Float)
 
-  final case class Deposit(amount: Float)
+  final case class Deposit(clock: Int, amount: Float)
+  final case class DepositAPI(amount: Float)
 
-  final case class Interest(constant: Float)
+  final case class Interest(clock: Int, constant: Float)
+  final case class InterestAPI(constant: Float)
 
-  final case class Transfer(bankAccountCluster: ActorRef, accountNumberDestination: String, amount: Float)
-
+  final case class Transfer(clockWithdraw: Int, clockDeposit: Int, bankAccountCluster: ActorRef, accountNumberDestination: String, amount: Float)
   final case class TransferAPI(accountNumberDestination: String, amount: Float)
 
-  final case object GetBalance
+  final case class GetBalance(clock: Int)
+  final case class GetBalanceAPI()
 
   trait OperationOutcome
 
@@ -53,6 +60,8 @@ class BankAccountActor extends PersistentActor with ActorLogging {
 
   var balance: Float = 0
   var active = false
+  var clock = new AtomicInteger(0)
+
 
   def updateState(event: BankAccountEvent): Unit = event match {
     case AccountCreated() => active = true
@@ -65,75 +74,94 @@ class BankAccountActor extends PersistentActor with ActorLogging {
   }
 
   val receiveCommand: Receive = {
-    case Create(_) =>
-      persist(AccountCreated())(e => {
-        updateState(e)
-        sender() ! OperationSuccess("Bank account created")
-      })
-    case GetBalance =>
-      if (!active) {
-        sender() ! OperationFailure("Account doesn't exist")
-      } else {
-        sender() ! OperationSuccess(balance.toString)
+    case Create(clock, accountNumber) =>
+      if(this.clock.get() != clock){
+        stash()
       }
-    case Withdraw(amount) =>
-      if (!active) {
-        sender() ! OperationFailure("Account doesn't exist")
-      } else {
-        if (balance >= amount) {
-          persist(BalanceDecreased(amount))(e => {
-            updateState(e)
-            sender() ! OperationSuccess("Withdrawn successfully.")
-          })
+      else {
+        persist(AccountCreated())(e => {
+          updateState(e)
+          sender() ! OperationSuccess("Bank account created")
+        })
+        this.clock.incrementAndGet()
+        unstashAll()
+      }
+    case GetBalance(clock) =>
+      if(this.clock.get() != clock){
+        stash()
+      }
+      else {
+        if (!active) {
+          sender() ! OperationFailure("Account doesn't exist")
         } else {
-          sender() ! OperationFailure("Insufficient balance.")
+          sender() ! OperationSuccess(balance.toString)
         }
+        this.clock.incrementAndGet()
+        unstashAll()
       }
-    case Deposit(amount) =>
-      if (!active) {
-        sender() ! OperationFailure("Account doesn't exist")
-      } else {
-        persist(BalanceIncreased(amount))(e => {
-          updateState(e)
-          sender() ! OperationSuccess("Deposited successfully.")
-        })
+    case Withdraw(clock, amount) =>
+      if(this.clock.get() != clock){
+        stash()
       }
-    case Interest(constant) =>
-      if(!active){
-        sender() ! OperationFailure("Account doesn't exist")
-      } else {
-        val bankEvent = BalanceIncreased(balance * constant) // if constant < 0, then the value will be decreased anyway
-        persist(bankEvent)(e => {
-          updateState(e)
-          sender() ! OperationSuccess("The interest has been applied successfully.")
-        })
+      else {
+        if (active) {
+          if (balance >= amount) {
+            persist(BalanceDecreased(amount))(e => {
+              updateState(e)
+            })
+          }
+        }
+        this.clock.incrementAndGet()
+        unstashAll()
       }
-    case Transfer(bankAccountCluster, accountNumberDestination, amount) =>
-      if(!active){
-        sender() ! OperationFailure("Account doesn't exist")
-      } else {
-        if (amount <= balance) {
-          persist(BalanceDecreased(amount))(e => {
+
+    case Deposit(clock, amount) =>
+      if(this.clock.get() != clock){
+        stash()
+      }
+      else{
+        if (active) {
+          persist(BalanceIncreased(amount))(e => {
             updateState(e)
-            val moneyDeposited: Future[OperationOutcome] =
-              (bankAccountCluster ? MessageWithId(accountNumberDestination, Deposit(amount))).mapTo[OperationOutcome]
-            moneyDeposited.onComplete {
-              case Success(value) =>
-                value match {
-                  case OperationSuccess(_) => updateState(e)
-                  case OperationFailure(_) => self ! Deposit(amount)
-                }
-              case Failure(ex) =>
-                self ! Deposit(amount)
-                ex.printStackTrace
-            }
-            bankAccountCluster ! MessageWithId(accountNumberDestination, Deposit(amount))
-            sender() ! OperationSuccess("Transferred successfully.")
           })
         }
-        else {
-          sender() ! OperationFailure("Not enough funds")
+        this.clock.incrementAndGet()
+        unstashAll()
+      }
+
+    case Interest(clock, constant) =>
+      if(this.clock.get() != clock){
+        stash()
+      }
+      else {
+        if (active) {
+          val bankEvent = BalanceIncreased(balance * constant)
+          persist(bankEvent)(e => {
+            updateState(e)
+          })
         }
+        this.clock.incrementAndGet()
+        unstashAll()
+      }
+    case Transfer(clockWithdraw, clockDeposit, bankAccountCluster, accountNumberDestination, amount) =>
+      if(this.clock.get() != clockWithdraw){
+        stash()
+      }
+      else{
+        if(active) {
+          if (amount <= balance) {
+            persist(BalanceDecreased(amount))(e => {
+              updateState(e)
+              bankAccountCluster ! MessageWithId(accountNumberDestination, Deposit(clockDeposit, amount))
+              // What if 'accountNumberDestination' isn't created yet?
+            })
+          }
+          else {
+            sender() ! OperationFailure("Not enough funds")
+          }
+        }
+        this.clock.incrementAndGet()
+        unstashAll()
       }
   }
 }

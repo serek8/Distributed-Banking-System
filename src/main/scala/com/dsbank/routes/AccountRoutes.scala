@@ -1,5 +1,7 @@
 package com.dsbank.routes
 
+import java.util
+
 import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.Directives._
@@ -12,8 +14,12 @@ import com.dsbank.JsonSupport
 import com.dsbank.Remote.MessageWithId
 import com.dsbank.actors.BankAccountActor._
 import akka.pattern.ask
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
+
 import akka.util.Timeout
 
+import scala.collection.mutable
 import scala.concurrent.duration._
 import scala.concurrent.Future
 
@@ -24,13 +30,22 @@ trait AccountRoutes extends JsonSupport {
   def bankAccountActorsCluster: ActorRef
 
   implicit lazy val timeout = Timeout(10.seconds)
+  val clockMap = new ConcurrentHashMap[String,AtomicInteger]()
+
+  def getNextClockValue(bankAccount:String) : Int = {
+    val currentClock = clockMap.computeIfAbsent(
+      bankAccount, (k: String) => new AtomicInteger(0)).getAndIncrement()
+    return currentClock
+  }
 
   lazy val accountRoutes: Route =
     pathPrefix("accounts") {
       post {
-        entity(as[Create]) { create =>
+        entity(as[CreateAPI]) { create =>
           val accountCreated: Future[OperationOutcome] =
-            (bankAccountActorsCluster ? MessageWithId(create.accountNumber, Create(create.accountNumber))).mapTo[OperationOutcome]
+                      (bankAccountActorsCluster ? MessageWithId(
+                        create.accountNumber,
+                        Create(getNextClockValue(create.accountNumber), create.accountNumber))).mapTo[OperationOutcome]
 
           onSuccess(accountCreated) {
             _ => complete(StatusCodes.Created)
@@ -42,7 +57,10 @@ trait AccountRoutes extends JsonSupport {
           path("balance") {
             get {
               val balanceRetrieved: Future[OperationOutcome] =
-                (bankAccountActorsCluster ? MessageWithId(accountNumber, GetBalance)).mapTo[OperationOutcome]
+                (bankAccountActorsCluster ? MessageWithId(
+                  accountNumber,
+                  GetBalance(getNextClockValue(accountNumber)))
+                  ).mapTo[OperationOutcome]
 
               onSuccess(balanceRetrieved) {
                 case OperationSuccess(result) =>
@@ -54,67 +72,57 @@ trait AccountRoutes extends JsonSupport {
           }~
           path("withdraw") {
             post {
-              entity(as[Withdraw]) { withdraw =>
-                val moneyWithdrawn: Future[OperationOutcome] =
-                  (bankAccountActorsCluster ? MessageWithId(accountNumber, Withdraw(withdraw.amount))).mapTo[OperationOutcome]
-
-                onSuccess(moneyWithdrawn) {
-                  case OperationSuccess(_) =>
-                    complete(StatusCodes.NoContent)
-                  case OperationFailure(_) =>
-                    complete(StatusCodes.NotFound)
-                }
+              entity(as[WithdrawAPI]) { withdraw =>
+                bankAccountActorsCluster ! MessageWithId(
+                  accountNumber,
+                  Withdraw(getNextClockValue(accountNumber),withdraw.amount)
+                )
+                complete(StatusCodes.NoContent)
               }
             }
           }~
           path("interest") {
             post {
-              entity(as[Interest]) { interest =>
-                val moneyInterest: Future[OperationOutcome] =
-                  (bankAccountActorsCluster ? MessageWithId(accountNumber, Interest(interest.constant))).mapTo[OperationOutcome]
-
-                onSuccess(moneyInterest) {
-                  case OperationSuccess(_) =>
-                    complete(StatusCodes.NoContent)
-                  case OperationFailure(_) =>
-                    complete(StatusCodes.NotFound)
-                }
+              entity(as[InterestAPI]) { interest =>
+                bankAccountActorsCluster ! MessageWithId(
+                  accountNumber,
+                  Interest(getNextClockValue(accountNumber), interest.constant))
+                complete(StatusCodes.NoContent)
               }
             }
           }~
           path("deposit") {
             post {
-              entity(as[Deposit]) { deposit =>
-                val moneyDeposited: Future[OperationOutcome] =
-                  (bankAccountActorsCluster ? MessageWithId(accountNumber, Deposit(deposit.amount))).mapTo[OperationOutcome]
-
-                onSuccess(moneyDeposited) {
-                  case OperationSuccess(_) =>
-                    complete(StatusCodes.NoContent)
-                  case OperationFailure(_) =>
-                    complete(StatusCodes.NotFound)
-                }
+              entity(as[DepositAPI]) { deposit =>
+                bankAccountActorsCluster ! MessageWithId(
+                  accountNumber,
+                  Deposit(getNextClockValue(accountNumber), deposit.amount)
+                )
+                complete(StatusCodes.NoContent)
               }
             }
           }~
           path("transfer") {
             post {
               entity(as[TransferAPI]) { transfer =>
-                val moneyTransferred: Future[OperationOutcome] =
-                  (bankAccountActorsCluster ? MessageWithId(
-                    accountNumber,
-                    Transfer(bankAccountActorsCluster, transfer.accountNumberDestination, transfer.amount)))
-                    .mapTo[OperationOutcome]
-
-                onSuccess(moneyTransferred) {
-                  case OperationSuccess(_) =>
-                    complete(StatusCodes.NoContent)
-                  case OperationFailure(_) =>
-                    complete(StatusCodes.NotFound)
-                }
+                bankAccountActorsCluster ! MessageWithId(
+                  accountNumber,
+                  Transfer(
+                    getNextClockValue(accountNumber),
+                    getNextClockValue(transfer.accountNumberDestination),
+                    bankAccountActorsCluster, transfer.accountNumberDestination,
+                    transfer.amount)
+                )
+                complete(StatusCodes.NoContent)
               }
             }
           }
         }
     }
+
+  def testClock(): Unit = {
+    bankAccountActorsCluster ! MessageWithId("1", Deposit(1, 200))
+    bankAccountActorsCluster ! MessageWithId("1", Deposit(0, 400))
+    complete(StatusCodes.NoContent)
+  }
 }

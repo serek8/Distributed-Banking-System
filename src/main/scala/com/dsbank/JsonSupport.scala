@@ -6,10 +6,10 @@ import com.dsbank.actors.BankAccountActor._
 trait JsonSupport extends SprayJsonSupport {
   import spray.json.DefaultJsonProtocol._
 
-  implicit val CreateAccountJsonFormat = jsonFormat1(Create)
-  implicit val DepositJsonFormat = jsonFormat1(Deposit)
-  implicit val WithdrawJsonFormat = jsonFormat1(Withdraw)
+  implicit val CreateAccountJsonFormat = jsonFormat1(CreateAPI)
+  implicit val DepositJsonFormat = jsonFormat1(DepositAPI)
+  implicit val WithdrawJsonFormat = jsonFormat1(WithdrawAPI)
   implicit val TransferJsonFormat = jsonFormat2(TransferAPI)
-  implicit val InterestJsonFormat = jsonFormat1(Interest)
+  implicit val InterestJsonFormat = jsonFormat1(InterestAPI)
 
 }
