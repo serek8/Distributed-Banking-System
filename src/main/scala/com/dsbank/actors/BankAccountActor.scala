@@ -85,7 +85,6 @@ class BankAccountActor extends PersistentActor with ActorLogging {
   val snapShotInterval = 5
   val receiveCommand: Receive = {
     case Create(clock, accountNumber) =>
-      println("Create msg_clock:" + clock + "\tthis clock:" + state.clock)
       if(state.clock.get() < clock){
         stash()
       }
@@ -96,22 +95,16 @@ class BankAccountActor extends PersistentActor with ActorLogging {
             saveSnapshot(state)
           sender() ! OperationSuccess("Bank account created")
         })
-
-        println("Create-end msg_clock:" + clock + "\tthis clock:" + state.clock)
         unstashAll()
       }
     case GetBalance(clock) =>
-      println("Get balance msg_clock:" + clock + "\tthis clock:" + state.clock)
       if(state.clock.get() < clock){
-        println("in stash")
         stash()
       }
       else if(state.clock.get() == clock){
         if (!state.active) {
-          println("in fail")
           sender() ! OperationFailure("Account doesn't exist")
         } else {
-          println("in success")
           persist(BalanceIncreased(0))(e => {
             state.update(e)
             if (lastSequenceNr % snapShotInterval == 0 && lastSequenceNr != 0)
