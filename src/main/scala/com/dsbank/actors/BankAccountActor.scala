@@ -6,7 +6,7 @@ import akka.actor.{ActorLogging, ActorRef, Stash}
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.Directives.onSuccess
 import akka.http.scaladsl.server.directives.RouteDirectives.complete
-import akka.persistence.PersistentActor
+import akka.persistence._
 import com.dsbank.Remote.MessageWithId
 import akka.pattern.ask
 
@@ -16,6 +16,17 @@ import akka.util.Timeout
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.util.{Failure, Success}
+
+case class BankAccountState() {
+  var active = false
+  var balance: Float = 0
+  var clock = new AtomicInteger(0)
+  def update(event: BankAccountEvent): Unit = event match {
+    case AccountCreated() => active = true
+    case BalanceIncreased(amount) => balance += amount
+    case BalanceDecreased(amount) => balance -= amount
+  }
+}
 
 object BankAccountActor {
   trait Command
@@ -56,102 +67,105 @@ class BankAccountActor extends PersistentActor with ActorLogging {
   implicit val timeout: Timeout = Timeout(5.seconds)
   import BankAccountActor._
 
+  var state = BankAccountState()
+
   override def persistenceId: String = self.path.name
 
-  var balance: Float = 0
-  var active = false
-  var clock = new AtomicInteger(0)
-
-
-  def updateState(event: BankAccountEvent): Unit = event match {
-    case AccountCreated() => active = true
-    case BalanceIncreased(amount) => balance += amount
-    case BalanceDecreased(amount) => balance -= amount
-  }
-
   val receiveRecover: Receive = {
-    case evt: BankAccountEvent => updateState(evt)
+    case evt: BankAccountEvent => state.update(evt)
+    case SnapshotOffer(_, snapshot: BankAccountState) => state = snapshot
   }
 
+  val snapShotInterval = 5
   val receiveCommand: Receive = {
     case Create(clock, accountNumber) =>
-      if(this.clock.get() != clock){
+      if(state.clock.get() != clock){
         stash()
       }
       else {
         persist(AccountCreated())(e => {
-          updateState(e)
+          state.update(e)
+          if (lastSequenceNr % snapShotInterval == 0 && lastSequenceNr != 0)
+            saveSnapshot(state)
           sender() ! OperationSuccess("Bank account created")
         })
-        this.clock.incrementAndGet()
+        state.clock.incrementAndGet()
         unstashAll()
       }
     case GetBalance(clock) =>
-      if(this.clock.get() != clock){
+      if(state.clock.get() != clock){
         stash()
       }
       else {
-        if (!active) {
+        if (!state.active) {
           sender() ! OperationFailure("Account doesn't exist")
         } else {
-          sender() ! OperationSuccess(balance.toString)
+          sender() ! OperationSuccess(state.balance.toString)
         }
-        this.clock.incrementAndGet()
+        state.clock.incrementAndGet()
         unstashAll()
       }
     case Withdraw(clock, amount) =>
-      if(this.clock.get() != clock){
+      if(state.clock.get() != clock){
         stash()
       }
       else {
-        if (active) {
-          if (balance >= amount) {
+        if (state.active) {
+          if (state.balance >= amount) {
             persist(BalanceDecreased(amount))(e => {
-              updateState(e)
+              state.update(e)
+              if (lastSequenceNr % snapShotInterval == 0 && lastSequenceNr != 0)
+                saveSnapshot(state)
             })
           }
         }
-        this.clock.incrementAndGet()
+        state.clock.incrementAndGet()
         unstashAll()
       }
 
     case Deposit(clock, amount) =>
-      if(this.clock.get() != clock){
+      if(state.clock.get() != clock){
         stash()
       }
       else{
-        if (active) {
+        if (state.active) {
           persist(BalanceIncreased(amount))(e => {
-            updateState(e)
+            state.update(e)
+            if (lastSequenceNr % snapShotInterval == 0 && lastSequenceNr != 0)
+              saveSnapshot(state)
           })
         }
-        this.clock.incrementAndGet()
+        state.clock.incrementAndGet()
         unstashAll()
       }
 
     case Interest(clock, constant) =>
-      if(this.clock.get() != clock){
+      if(state.clock.get() != clock){
         stash()
       }
       else {
-        if (active) {
-          val bankEvent = BalanceIncreased(balance * constant)
+        if (state.active) {
+          val bankEvent = BalanceIncreased(state.balance * constant)
           persist(bankEvent)(e => {
-            updateState(e)
+            state.update(e)
+            if (lastSequenceNr % snapShotInterval == 0 && lastSequenceNr != 0)
+              saveSnapshot(state)
           })
         }
-        this.clock.incrementAndGet()
+        state.clock.incrementAndGet()
         unstashAll()
       }
     case Transfer(clockWithdraw, clockDeposit, bankAccountCluster, accountNumberDestination, amount) =>
-      if(this.clock.get() != clockWithdraw){
+      if(state.clock.get() != clockWithdraw){
         stash()
       }
       else{
-        if(active) {
-          if (amount <= balance) {
+        if(state.active) {
+          if (amount <= state.balance) {
             persist(BalanceDecreased(amount))(e => {
-              updateState(e)
+              state.update(e)
+              if (lastSequenceNr % snapShotInterval == 0 && lastSequenceNr != 0)
+                saveSnapshot(state)
               bankAccountCluster ! MessageWithId(accountNumberDestination, Deposit(clockDeposit, amount))
               // What if 'accountNumberDestination' isn't created yet?
             })
@@ -160,7 +174,7 @@ class BankAccountActor extends PersistentActor with ActorLogging {
             sender() ! OperationFailure("Not enough funds")
           }
         }
-        this.clock.incrementAndGet()
+        state.clock.incrementAndGet()
         unstashAll()
       }
   }
