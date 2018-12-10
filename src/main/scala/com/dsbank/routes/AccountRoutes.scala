@@ -18,16 +18,20 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
 import akka.util.Timeout
+import com.dsbank.actors.ClockManagerActor
+import com.dsbank.actors.ClockManagerActor.GetNextClockValue
 
 import scala.collection.mutable
 import scala.concurrent.duration._
 import scala.concurrent.Future
+import scala.concurrent.ExecutionContext.Implicits.global
 
 trait AccountRoutes extends JsonSupport {
 
   implicit def system: ActorSystem
 
   def bankAccountActorsCluster: ActorRef
+  val clockManagerActor: ActorRef
 
   implicit lazy val timeout = Timeout(10.seconds)
   val clockMap = new ConcurrentHashMap[String,AtomicInteger]()
@@ -42,13 +46,17 @@ trait AccountRoutes extends JsonSupport {
     pathPrefix("accounts") {
       post {
         entity(as[CreateAPI]) { create =>
-          val accountCreated: Future[OperationOutcome] =
-                      (bankAccountActorsCluster ? MessageWithId(
-                        create.accountNumber,
-                        Create(getNextClockValue(create.accountNumber), create.accountNumber))).mapTo[OperationOutcome]
+          val currentClockRetrieved: Future[Int] = (clockManagerActor ? GetNextClockValue(create.accountNumber)).mapTo[Int]
+          onSuccess(currentClockRetrieved) { currentClock =>
+            val accountCreated: Future[OperationOutcome] =
+              (bankAccountActorsCluster ? MessageWithId(
+                create.accountNumber,
+                Create(currentClock, create.accountNumber)
+              )).mapTo[OperationOutcome]
 
-          onSuccess(accountCreated) {
-            _ => complete(StatusCodes.Created)
+            onSuccess(accountCreated) {
+              _ => complete(StatusCodes.Created)
+            }
           }
         }
       } ~
@@ -56,64 +64,84 @@ trait AccountRoutes extends JsonSupport {
           accountNumber =>
           path("balance") {
             get {
-              val balanceRetrieved: Future[OperationOutcome] =
-                (bankAccountActorsCluster ? MessageWithId(
-                  accountNumber,
-                  GetBalance(getNextClockValue(accountNumber)))
-                  ).mapTo[OperationOutcome]
+              val currentClockRetrieved: Future[Int] = (clockManagerActor ? GetNextClockValue(accountNumber)).mapTo[Int]
+              onSuccess(currentClockRetrieved) { currentClock =>
+                val balanceRetrieved: Future[OperationOutcome] =
+                  (bankAccountActorsCluster ? MessageWithId(
+                    accountNumber,
+                    GetBalance(currentClock))
+                    ).mapTo[OperationOutcome]
 
-              onSuccess(balanceRetrieved) {
-                case OperationSuccess(result) =>
-                  complete(result)
-                case OperationFailure(_) =>
-                  complete(StatusCodes.NotFound)
+                onSuccess(balanceRetrieved) {
+                  case OperationSuccess(result) =>
+                    complete(result)
+                  case OperationFailure(_) =>
+                    complete(StatusCodes.NotFound)
+                }
               }
             }
           }~
           path("withdraw") {
             post {
               entity(as[WithdrawAPI]) { withdraw =>
-                bankAccountActorsCluster ! MessageWithId(
-                  accountNumber,
-                  Withdraw(getNextClockValue(accountNumber),withdraw.amount)
-                )
-                complete(StatusCodes.NoContent)
+                val currentClockRetrieved: Future[Int] = (clockManagerActor ? GetNextClockValue(accountNumber)).mapTo[Int]
+                onSuccess(currentClockRetrieved) { currentClock =>
+                  bankAccountActorsCluster ! MessageWithId(
+                    accountNumber,
+                    Withdraw(currentClock, withdraw.amount)
+                  )
+                  complete(StatusCodes.NoContent)
+                }
               }
             }
           }~
           path("interest") {
             post {
               entity(as[InterestAPI]) { interest =>
-                bankAccountActorsCluster ! MessageWithId(
-                  accountNumber,
-                  Interest(getNextClockValue(accountNumber), interest.constant))
-                complete(StatusCodes.NoContent)
+                val currentClockRetrieved: Future[Int] = (clockManagerActor ? GetNextClockValue(accountNumber)).mapTo[Int]
+                onSuccess(currentClockRetrieved) { currentClock =>
+                  bankAccountActorsCluster ! MessageWithId(
+                    accountNumber,
+                    Interest(currentClock, interest.constant))
+                  complete(StatusCodes.NoContent)
+                }
               }
             }
           }~
           path("deposit") {
             post {
               entity(as[DepositAPI]) { deposit =>
-                bankAccountActorsCluster ! MessageWithId(
-                  accountNumber,
-                  Deposit(getNextClockValue(accountNumber), deposit.amount)
-                )
-                complete(StatusCodes.NoContent)
+                val currentClockRetrieved: Future[Int] = (clockManagerActor ? GetNextClockValue(accountNumber)).mapTo[Int]
+                onSuccess(currentClockRetrieved) { currentClock =>
+                  bankAccountActorsCluster ! MessageWithId(
+                    accountNumber,
+                    Deposit(currentClock, deposit.amount)
+                  )
+                  complete(StatusCodes.NoContent)
+                }
               }
             }
           }~
           path("transfer") {
             post {
               entity(as[TransferAPI]) { transfer =>
-                bankAccountActorsCluster ! MessageWithId(
-                  accountNumber,
-                  Transfer(
-                    getNextClockValue(accountNumber),
-                    getNextClockValue(transfer.accountNumberDestination),
-                    bankAccountActorsCluster, transfer.accountNumberDestination,
-                    transfer.amount)
-                )
-                complete(StatusCodes.NoContent)
+                val currentClockOriginRetrieved: Future[Int] = (clockManagerActor ? GetNextClockValue(accountNumber)).mapTo[Int]
+                val currentClockDestRetrieved: Future[Int] = (clockManagerActor ? GetNextClockValue(transfer.accountNumberDestination)).mapTo[Int]
+                val clocksRetrieved = for {
+                  origin <- currentClockOriginRetrieved
+                  dest <- currentClockDestRetrieved
+                } yield Seq(origin, dest)
+                onSuccess(clocksRetrieved) { clocks =>
+                  bankAccountActorsCluster ! MessageWithId(
+                    accountNumber,
+                    Transfer(
+                      clocks(0),
+                      clocks(1),
+                      bankAccountActorsCluster, transfer.accountNumberDestination,
+                      transfer.amount)
+                  )
+                  complete(StatusCodes.NoContent)
+                }
               }
             }
           }
