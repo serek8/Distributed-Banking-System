@@ -29,8 +29,6 @@ case class BankAccountState() {
 }
 
 object BankAccountActor {
-  var state = BankAccountState()
-
   trait Command
 
   final case class Create(clock: Int, accountNumber: String)
@@ -68,6 +66,8 @@ class BankAccountActor extends PersistentActor with ActorLogging {
 
   implicit val timeout: Timeout = Timeout(5.seconds)
   import BankAccountActor._
+
+  var state = BankAccountState()
 
   override def persistenceId: String = self.path.name
 
