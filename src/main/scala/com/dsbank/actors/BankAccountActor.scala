@@ -102,16 +102,16 @@ class BankAccountActor extends PersistentActor with ActorLogging {
         stash()
       }
       else if(state.clock.get() == clock){
-        if (!state.active) {
-          sender() ! OperationFailure("Account doesn't exist")
-        } else {
-          persist(BalanceIncreased(0))(e => {
-            state.update(e)
-            if (lastSequenceNr % snapShotInterval == 0 && lastSequenceNr != 0)
-              saveSnapshot(state)
+        persist(BalanceIncreased(0))(e => {
+          state.update(e)
+          if (lastSequenceNr % snapShotInterval == 0 && lastSequenceNr != 0)
+            saveSnapshot(state)
+          if (!state.active) {
+            sender() ! OperationFailure("Account doesn't exist")
+          } else {
             sender() ! OperationSuccess(state.balance.toString)
-          })
-        }
+          }
+        })
         unstashAll()
       }
     case Withdraw(clock, amount) =>
@@ -120,17 +120,14 @@ class BankAccountActor extends PersistentActor with ActorLogging {
       }
       else if(state.clock.get() == clock){
         var withdrawAmount = amount
-        if (!state.active) {
+        if (!state.active || state.balance < amount) {
           withdrawAmount = 0
         }
-        if (state.balance >= amount) {
-          persist(BalanceDecreased(amount))(e => {
-            state.update(e)
-            if (lastSequenceNr % snapShotInterval == 0 && lastSequenceNr != 0)
-              saveSnapshot(state)
-          })
-        }
-
+        persist(BalanceDecreased(amount))(e => {
+          state.update(e)
+          if (lastSequenceNr % snapShotInterval == 0 && lastSequenceNr != 0)
+            saveSnapshot(state)
+        })
         unstashAll()
       }
 
@@ -170,21 +167,15 @@ class BankAccountActor extends PersistentActor with ActorLogging {
       }
       else if(state.clock.get() == clockWithdraw){
         var withdrawAmount = amount
-        if(!state.active) {
+        if(!state.active || withdrawAmount > state.balance) {
           withdrawAmount = 0
         }
-        if (withdrawAmount <= state.balance) {
-          persist(BalanceDecreased(withdrawAmount))(e => {
-            state.update(e)
-            if (lastSequenceNr % snapShotInterval == 0 && lastSequenceNr != 0)
-              saveSnapshot(state)
-            bankAccountCluster ! MessageWithId(accountNumberDestination, Deposit(clockDeposit, amount))
-          })
-        }
-        else {
-          sender() ! OperationFailure("Not enough funds")
-        }
-
+        persist(BalanceDecreased(withdrawAmount))(e => {
+          state.update(e)
+          if (lastSequenceNr % snapShotInterval == 0 && lastSequenceNr != 0)
+            saveSnapshot(state)
+          bankAccountCluster ! MessageWithId(accountNumberDestination, Deposit(clockDeposit, amount))
+        })
         unstashAll()
       }
   }
