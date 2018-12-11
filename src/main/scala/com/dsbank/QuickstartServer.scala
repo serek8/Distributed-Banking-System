@@ -1,5 +1,7 @@
 package com.dsbank
 
+import java.net.InetAddress
+
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration.Duration
 import scala.util.{Failure, Success}
@@ -14,9 +16,24 @@ import com.dsbank.routes.AccountRoutes
 
 object QuickstartServer extends App with AccountRoutes {
 
-  private val port = sys.env("PORT")
-  println(s"Try to listen at port $port")
-  System.setProperty("akka.remote.netty.tcp.port", port)
+  var runInDAS = false
+  if(sys.env.get("RUN_IN_DAS").isDefined){
+    runInDAS = true
+  }
+
+  var hostname = "localhost"
+  if(runInDAS) {
+    hostname = sys.env("THIS_IP")
+    val akkaSeedIp = sys.env("AKKA_SEED_IP")
+    val nodestr = s"akka.tcp://BankCluster@$akkaSeedIp:2552"
+    println(s"This IP address=$hostname\nseedNode=$nodestr")
+    System.setProperty("akka.cluster.seed-nodes.0", nodestr)
+  }
+  else{
+    val port = sys.env("PORT")
+    println(s"Try to listen at port $port")
+    System.setProperty("akka.remote.netty.tcp.port", port)
+  }
 
   implicit val system: ActorSystem = ActorSystem("BankCluster")
 
@@ -45,9 +62,8 @@ object QuickstartServer extends App with AccountRoutes {
   lazy val routes: Route = accountRoutes
 
   private val httpRunEnv = sys.env.get("HTTP")
-
-  if (httpRunEnv.isDefined) {
-    val serverBinding: Future[Http.ServerBinding] = Http().bindAndHandle(routes, "localhost", 8080)
+  if(httpRunEnv.isDefined && httpRunEnv == "1") {
+    val serverBinding: Future[Http.ServerBinding] = Http().bindAndHandle(routes, hostname, 8061)
     serverBinding.onComplete {
       case Success(bound) =>
         println(s"Server online at http://${bound.localAddress.getHostString}:${bound.localAddress.getPort}/")
