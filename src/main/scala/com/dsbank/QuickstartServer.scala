@@ -9,7 +9,7 @@ import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Route
 import akka.stream.ActorMaterializer
 import com.dsbank.Remote.MessageWithId
-import com.dsbank.actors.{BankAccountActor}
+import com.dsbank.actors.{BankAccountActor, ClockManagerActor}
 import com.dsbank.routes.AccountRoutes
 
 object QuickstartServer extends App with AccountRoutes {
@@ -39,6 +39,8 @@ object QuickstartServer extends App with AccountRoutes {
     settings = ClusterShardingSettings(system),
     extractEntityId = extractEntityId,
     extractShardId = extractShardId)
+
+  val clockManagerActor: ActorRef = system.actorOf(ClockManagerActor.props, "clockManager")
 
   lazy val routes: Route = accountRoutes
 

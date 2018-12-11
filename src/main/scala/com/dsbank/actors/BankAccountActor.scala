@@ -22,9 +22,15 @@ case class BankAccountState() {
   var balance: Float = 0
   var clock = new AtomicInteger(0)
   def update(event: BankAccountEvent): Unit = event match {
-    case AccountCreated() => active = true
-    case BalanceIncreased(amount) => balance += amount
-    case BalanceDecreased(amount) => balance -= amount
+    case AccountCreated() =>
+      active = true
+      clock.incrementAndGet()
+    case BalanceIncreased(amount) =>
+      balance += amount
+      clock.incrementAndGet()
+    case BalanceDecreased(amount) =>
+      balance -= amount
+      clock.incrementAndGet()
   }
 }
 
@@ -79,102 +85,97 @@ class BankAccountActor extends PersistentActor with ActorLogging {
   val snapShotInterval = 5
   val receiveCommand: Receive = {
     case Create(clock, accountNumber) =>
-      if(state.clock.get() != clock){
+      if(state.clock.get() < clock){
         stash()
       }
-      else {
+      else if(state.clock.get() == clock){
         persist(AccountCreated())(e => {
           state.update(e)
           if (lastSequenceNr % snapShotInterval == 0 && lastSequenceNr != 0)
             saveSnapshot(state)
           sender() ! OperationSuccess("Bank account created")
         })
-        state.clock.incrementAndGet()
         unstashAll()
       }
     case GetBalance(clock) =>
-      if(state.clock.get() != clock){
+      if(state.clock.get() < clock){
         stash()
       }
-      else {
-        if (!state.active) {
-          sender() ! OperationFailure("Account doesn't exist")
-        } else {
-          sender() ! OperationSuccess(state.balance.toString)
-        }
-        state.clock.incrementAndGet()
+      else if(state.clock.get() == clock){
+        persist(BalanceIncreased(0))(e => {
+          state.update(e)
+          if (lastSequenceNr % snapShotInterval == 0 && lastSequenceNr != 0)
+            saveSnapshot(state)
+          if (!state.active) {
+            sender() ! OperationFailure("Account doesn't exist")
+          } else {
+            sender() ! OperationSuccess(state.balance.toString)
+          }
+        })
         unstashAll()
       }
     case Withdraw(clock, amount) =>
-      if(state.clock.get() != clock){
+      if(state.clock.get() < clock){
         stash()
       }
-      else {
-        if (state.active) {
-          if (state.balance >= amount) {
-            persist(BalanceDecreased(amount))(e => {
-              state.update(e)
-              if (lastSequenceNr % snapShotInterval == 0 && lastSequenceNr != 0)
-                saveSnapshot(state)
-            })
-          }
+      else if(state.clock.get() == clock){
+        var withdrawAmount = amount
+        if (!state.active || state.balance < amount) {
+          withdrawAmount = 0
         }
-        state.clock.incrementAndGet()
+        persist(BalanceDecreased(amount))(e => {
+          state.update(e)
+          if (lastSequenceNr % snapShotInterval == 0 && lastSequenceNr != 0)
+            saveSnapshot(state)
+        })
         unstashAll()
       }
 
     case Deposit(clock, amount) =>
-      if(state.clock.get() != clock){
+      if(state.clock.get() < clock){
         stash()
       }
-      else{
-        if (state.active) {
-          persist(BalanceIncreased(amount))(e => {
-            state.update(e)
-            if (lastSequenceNr % snapShotInterval == 0 && lastSequenceNr != 0)
-              saveSnapshot(state)
-          })
+      else if(state.clock.get() == clock){
+        var depositAmount = amount
+        if (!state.active) {
+          depositAmount = 0
         }
-        state.clock.incrementAndGet()
+        persist(BalanceIncreased(depositAmount))(e => {
+          state.update(e)
+          if (lastSequenceNr % snapShotInterval == 0 && lastSequenceNr != 0)
+            saveSnapshot(state)
+        })
         unstashAll()
       }
 
     case Interest(clock, constant) =>
-      if(state.clock.get() != clock){
+      if(state.clock.get() < clock){
         stash()
       }
-      else {
-        if (state.active) {
+      else if(state.clock.get() == clock){
           val bankEvent = BalanceIncreased(state.balance * constant)
           persist(bankEvent)(e => {
             state.update(e)
             if (lastSequenceNr % snapShotInterval == 0 && lastSequenceNr != 0)
               saveSnapshot(state)
           })
-        }
-        state.clock.incrementAndGet()
         unstashAll()
       }
     case Transfer(clockWithdraw, clockDeposit, bankAccountCluster, accountNumberDestination, amount) =>
-      if(state.clock.get() != clockWithdraw){
+      if(state.clock.get() < clockWithdraw){
         stash()
       }
-      else{
-        if(state.active) {
-          if (amount <= state.balance) {
-            persist(BalanceDecreased(amount))(e => {
-              state.update(e)
-              if (lastSequenceNr % snapShotInterval == 0 && lastSequenceNr != 0)
-                saveSnapshot(state)
-              bankAccountCluster ! MessageWithId(accountNumberDestination, Deposit(clockDeposit, amount))
-              // What if 'accountNumberDestination' isn't created yet?
-            })
-          }
-          else {
-            sender() ! OperationFailure("Not enough funds")
-          }
+      else if(state.clock.get() == clockWithdraw){
+        var withdrawAmount = amount
+        if(!state.active || withdrawAmount > state.balance) {
+          withdrawAmount = 0
         }
-        state.clock.incrementAndGet()
+        persist(BalanceDecreased(withdrawAmount))(e => {
+          state.update(e)
+          if (lastSequenceNr % snapShotInterval == 0 && lastSequenceNr != 0)
+            saveSnapshot(state)
+          bankAccountCluster ! MessageWithId(accountNumberDestination, Deposit(clockDeposit, amount))
+        })
         unstashAll()
       }
   }
