@@ -1,15 +1,15 @@
 package com.dsbank
 
-import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.{ Await, ExecutionContext, Future }
 import scala.concurrent.duration.Duration
-import scala.util.{Failure, Success}
+import scala.util.{ Failure, Success }
 import akka.actor._
-import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardRegion}
+import akka.cluster.sharding.{ ClusterSharding, ClusterShardingSettings, ShardRegion }
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Route
 import akka.stream.ActorMaterializer
 import com.dsbank.Remote.MessageWithId
-import com.dsbank.actors.{BankAccountActor, ClockManagerActor}
+import com.dsbank.actors.{ BankAccountActor, ClockManagerActor }
 import com.dsbank.routes.AccountRoutes
 
 object QuickstartServer extends App with AccountRoutes {
@@ -38,7 +38,8 @@ object QuickstartServer extends App with AccountRoutes {
     entityProps = Props[BankAccountActor],
     settings = ClusterShardingSettings(system),
     extractEntityId = extractEntityId,
-    extractShardId = extractShardId)
+    extractShardId = extractShardId
+  )
 
   val clockManagerActor: ActorRef = system.actorOf(ClockManagerActor.props, "clockManager")
 
@@ -47,7 +48,7 @@ object QuickstartServer extends App with AccountRoutes {
   private val httpRunEnv = sys.env.get("HTTP")
 
   if (httpRunEnv.isDefined) {
-    val serverBinding: Future[Http.ServerBinding] = Http().bindAndHandle(routes, "localhost", 8080)
+    val serverBinding: Future[Http.ServerBinding] = Http().bindAndHandle(routes, 145.100.111.54, 8080)
     serverBinding.onComplete {
       case Success(bound) =>
         println(s"Server online at http://${bound.localAddress.getHostString}:${bound.localAddress.getPort}/")

@@ -15,7 +15,8 @@ object ClockManagerActor {
 
   def updateState(event: ClockIncremented): Int =
     clockMap.computeIfAbsent(
-      event.bankAccount, _ => new AtomicInteger(0)).getAndIncrement()
+      event.bankAccount, _ => new AtomicInteger(0)
+    ).getAndIncrement()
 
   case class GetNextClockValue(bankAccount: String)
 }
