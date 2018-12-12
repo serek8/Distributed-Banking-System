@@ -48,7 +48,7 @@ object QuickstartServer extends App with AccountRoutes {
   private val httpRunEnv = sys.env.get("HTTP")
 
   if (httpRunEnv.isDefined) {
-    val serverBinding: Future[Http.ServerBinding] = Http().bindAndHandle(routes, 145.100.111.54, 8080)
+    val serverBinding: Future[Http.ServerBinding] = Http().bindAndHandle(routes, "145.100.111.54", 8080)
     serverBinding.onComplete {
       case Success(bound) =>
         println(s"Server online at http://${bound.localAddress.getHostString}:${bound.localAddress.getPort}/")
