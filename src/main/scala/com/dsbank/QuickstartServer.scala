@@ -28,6 +28,7 @@ object QuickstartServer extends App with AccountRoutes {
     val nodestr = s"akka.tcp://BankCluster@$akkaSeedIp:2552"
     println(s"This IP address=$hostname\nseedNode=$nodestr")
     System.setProperty("akka.cluster.seed-nodes.0", nodestr)
+    System.setProperty("akka.remote.netty.tcp.hostname", hostname)
   }
   else{
     val port = sys.env("PORT")
@@ -62,7 +63,8 @@ object QuickstartServer extends App with AccountRoutes {
   lazy val routes: Route = accountRoutes
 
   private val httpRunEnv = sys.env.get("HTTP")
-  if(httpRunEnv.isDefined && httpRunEnv == "1") {
+
+  if(httpRunEnv.isDefined) {
     val serverBinding: Future[Http.ServerBinding] = Http().bindAndHandle(routes, hostname, 8061)
     serverBinding.onComplete {
       case Success(bound) =>
