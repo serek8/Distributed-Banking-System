@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+	<title>DS Bank</title>
+	 <meta charset="UTF-8"> 
+	<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+	<script type="text/javascript">
+	$(document).ready(function(){
+
+		for (var i=1; i < 120; i++){
+		  $("#BalanceTable").append('<tr class="BalanceRow"><td>'+i+'</td><td><div id="Balance'+i+'">...</div></td></tr>');
+		}
+		
+		function updateBalance( b ) {
+			var rowid = "#Balance"+b;$(rowid).css("background-color","#FFD80E");
+			$.ajax({url: "https://dsbank.online/accounts/"+b+"/balance", success: function(result){ var rowid = "#Balance"+b; $(rowid).html(result); $(rowid).css("background-color","#0EFF47");}});
+		}
+		
+		$("button").click(function(){
+			for (var b=1; b < 120; b++){
+				setTimeout(updateBalance( b ), 50*b)
+			}
+		});
+		
+	});
+	</script>
+	<style type="text/css">
+		html, body {border: 0; margin: 0; padding: 0;}
+		body {background-color: #7affbf;}
+		tr.BalanceRow td {border: 1px solid grey;}
+		tr.BalanceRow td{border-top-width:2px;border-bottom-width:2px;}
+		div#header {background-image: url('dsblogo.png');width:500px;height:100px;display:block;}
+		iframe{overflow:hidden;width: 250px; height: 120px;}
+	</style>
+</head>
+
+<body>
+	<div id="header"></div>
+	<iframe src="create.html" width="250" height="120"></iframe>
+	<iframe src="transfer.html" width="250" height="120"></iframe><br />
+	<iframe src="deposit.html" width="250" height="120"></iframe>
+	<iframe src="withdraw.html" width="250" height="120"></iframe><br />	
+	<hr />
+	<div id="BalanceView">
+		<button>Update BalanceTable View</button>
+		<table id="BalanceTable">
+		<tr><th>AccountNo</th><th>Balance</th></tr>
+		</table>
+	</div>
+</body>
+</html>

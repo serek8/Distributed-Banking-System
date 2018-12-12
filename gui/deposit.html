@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>jQuery.post demo</title>
+  <script src="https://code.jquery.com/jquery-1.10.2.js"></script>
+<style>html, body { border:0; margin:0; padding:10px; }body { font-family: 'Helvetica', 'Arial',  'Verdana', 'sans-serif'; }</style></head>
+<body>
+ 
+<form action="#" id="depositForm" method="POST">
+  <input type="text" name="accountNumber" value="" placeholder="accountNumber">
+  <input type="text" name="amount"  value="" placeholder="amount">
+  <input type="submit" value="Deposit">
+</form>
+<!-- the result of the search will be rendered inside this div -->
+<div id="result"></div>
+ 
+<script>
+window.onload = function() {
+// Attach a submit handler to the form
+$( "#depositForm" ).submit(function( event ) {
+ 
+  // Stop form from submitting normally
+  event.preventDefault();
+ 
+  // Get some values from elements on the page:
+  var $form = $( this ),
+    amountInput = parseInt($form.find( "input[name='amount']" ).val()),
+    accountNumber = parseInt($form.find( "input[name='accountNumber']" ).val()),
+    url = "accounts/"+accountNumber+"/deposit";
+    //url = $form.attr( "action" );
+ 
+  // Send the data using post
+  var json = JSON.stringify({ amount: parseInt(amountInput) })
+  var posting = $.ajax({
+    type: 'POST',
+    url: url,
+    data: json,
+    success: null,
+    contentType: "application/json",
+    dataType: 'json'
+}); 
+ 
+  // Put the results in a div
+  posting.done(function( data ) {
+    var content = $( data ).find( "#content" );
+    $( "#result" ).empty().append( content );
+  });
+});
+};</script>
+ 
+</body>
+</html>
