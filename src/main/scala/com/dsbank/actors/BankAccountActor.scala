@@ -132,6 +132,11 @@ class BankAccountActor extends PersistentActor with ActorLogging {
       }
 
     case Deposit(clock, amount) =>
+      /** Artificial latency for account name "delayed" */
+      if (self.path.name == "delayed") {
+        Thread.sleep(2000)
+      }
+
       if(state.clock.get() < clock){
         stash()
       }
