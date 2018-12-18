@@ -123,7 +123,7 @@ class BankAccountActor extends PersistentActor with ActorLogging {
         if (!state.active || state.balance < amount) {
           withdrawAmount = 0
         }
-        persist(BalanceDecreased(amount))(e => {
+        persist(BalanceDecreased(withdrawAmount))(e => {
           state.update(e)
           if (lastSequenceNr % snapShotInterval == 0 && lastSequenceNr != 0)
             saveSnapshot(state)
@@ -174,7 +174,7 @@ class BankAccountActor extends PersistentActor with ActorLogging {
           state.update(e)
           if (lastSequenceNr % snapShotInterval == 0 && lastSequenceNr != 0)
             saveSnapshot(state)
-          bankAccountCluster ! MessageWithId(accountNumberDestination, Deposit(clockDeposit, amount))
+          bankAccountCluster ! MessageWithId(accountNumberDestination, Deposit(clockDeposit, withdrawAmount))
         })
         unstashAll()
       }
