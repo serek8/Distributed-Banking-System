@@ -1,6 +1,6 @@
 #####################################
-###  Info v1
-###  a=bab2501 v= 1.0 d= 2018.12.08
+###  Demo Tester Side B: Logger v4
+###  a=bab2501 v= 4.0 d= 2018.12.19
 ####################################
 
 ###
@@ -9,6 +9,7 @@
 #########################
 import requests
 import time
+import sys
 
 ###
 # Global Settings
@@ -18,6 +19,32 @@ host = "145.100.111.54"
 protocol = "http"
 port = "8080"
 baseurl = protocol + "://" + host + ":" + port
+
+###
+# CLI Settings
+#########################
+
+try:
+    sys.argv[1]
+except NameError:
+    mode = 'r'
+else:
+    mode = sys.argv[1]  # r = receive / s = send
+	
+try:
+    sys.argv[2]
+except NameError:
+    accountNumber = '1'
+else:
+    accountNumber = sys.argv[2] #accountNumber to attatch to (receive)
+	
+try:
+    sys.argv[3]
+except NameError:
+    accountNumberDestination = accountNumber + 1
+else:
+    accountNumberDestination = sys.argv[3] #accountNumberDestination to attatch to (sendmode)
+
 
 ###
 # Standard Functions (theAPI) 
@@ -41,33 +68,49 @@ def balanceAccountRt(accountNumber):
         try:
 		return float(r.text)
 	except:
-		return 600001.1
-
-
+		return 600001.1 #Error code without create Error
 
 ###
 # Test 7
 #########################
 
-def test(run, acc):
-	while (balanceAccountRt(acc) != 60000):
-		print("waitAreceive" + str(acc+1))
+def sendTest(run, accr, accs):
+	while (balanceAccountRt(accs) != 60000):
+		print("waitAreceive" + str(accs))
 		#time.sleep(0.1)
 	start = time.time()
 	print("start" + str(start))
-	while (balanceAccountRt(acc+1) < 60000):
-		print balanceAccountRt(acc+1)
+	while (balanceAccountRt(accs) < 60000):
+		print balanceAccountRt(accs)
 		time.sleep(0.1)
 	end = time.time()
 	print("end" + str(end))
 	differ = end - start;
 	print("time" + str(differ))
 	f = open('results.log', 'a')
-	f.write("receive,"+ str(run) + ","  + str(acc) + ","  + str(acc+1) + "," + str(start) + "," + str(end) + "," + str(differ) + "," )
+	f.write("send,"+ str(run) + ","  + str(accs) + ","  + str(accs) + "," + str(start) + "," + str(end) + "," + str(differ) + "," )
 	f.write("\n")
 	f.close()
 	return True;
-
+	
+def receiveTest(run, accr, accs):
+	while (balanceAccountRt(accr) != 60000):
+		print("waitAreceive" + str(accr))
+		#time.sleep(0.1)
+	start = time.time()
+	print("start" + str(start))
+	while (balanceAccountRt(accr) < 60000):
+		print balanceAccountRt(accr)
+		time.sleep(0.1)
+	end = time.time()
+	print("end" + str(end))
+	differ = end - start;
+	print("time" + str(differ))
+	f = open('results.log', 'a')
+	f.write("receive,"+ str(run) + ","  + str(accr) + ","  + str(accs) + "," + str(start) + "," + str(end) + "," + str(differ) + "," )
+	f.write("\n")
+	f.close()
+	return True;
 
 def start(acc):
 	#balanceAccount(acc)
@@ -77,15 +120,15 @@ def start(acc):
 	time.sleep(2)
 	return True
 
-
-
-countt = 0
-
+round = 0
 while True:
-	countt = countt+1
+	round = round+1
 	print("\n\n\n\n\n\n\n\n\n")
 	print(time.ctime())
 	print("5")
-	test(countt,5)
+	if(mode="r"):
+		receiveTest(round,accountNumber,accountNumberDestination)
+	if(mode="r"):
+		sendTest(round,accountNumber,accountNumberDestination)
 	time.sleep(30)
 
