@@ -2,7 +2,9 @@
 <html lang="en-GB">
 <head>
 	<title>DS Bank</title>
-	 <meta charset="UTF-8"> 
+	<meta charset="UTF-8"> 
+	<meta name="author" content="B.A.Blaauwgeers BAB2501">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
 	<script type="text/javascript">
 	$(document).ready(function(){
@@ -16,11 +18,28 @@
 			$.ajax({url: "https://dsbank.online/accounts/"+b+"/balance", success: function(result){ var rowid = "#Balance"+b; $(rowid).html(result); $(rowid).css("background-color","#0EFF47");}});
 		}
 		
-		$("button").click(function(){
+		function updateFreq() {
+                        for (var b=1; b < 10; b++){
+                                setTimeout(updateBalance( b ), 50*b)
+                        }
+			//setTimeout(updateFreq(), 5000)
+                }
+		
+		$("button#ref120").click(function(){
 			for (var b=1; b < 120; b++){
 				setTimeout(updateBalance( b ), 50*b)
 			}
 		});
+
+		$("button#ref10").click(function(){
+                        for (var b=1; b < 10; b++){
+                                setTimeout(updateBalance( b ), 50*b)
+                        }
+                });
+		
+		$("button#freq10").click(function(){
+                        setTimeout(updateFreq(), 5)
+                });
 		
 	});
 	</script>
@@ -30,19 +49,27 @@
 		tr.BalanceRow td {border: 1px solid grey;}
 		tr.BalanceRow td{border-top-width:2px;border-bottom-width:2px;}
 		div#header {background-image: url('dsblogo.png');width:500px;height:100px;display:block;}
-		iframe{overflow:hidden;width: 250px; height: 120px;}
+		div#menu {display:block;width: 500px; height: 250px;}
+		iframe{overflow:hidden;width: 225px; height: 120px;}
+		div.ifo {display:block;width: 225px; height: 120px;float: left;}
+		div.ifoa {float: left;}
+		div.ifob {float: right;}
 	</style>
 </head>
 
 <body>
 	<div id="header"></div>
-	<iframe src="create.html" width="250" height="120"></iframe>
-	<iframe src="transfer.html" width="250" height="120"></iframe><br />
-	<iframe src="deposit.html" width="250" height="120"></iframe>
-	<iframe src="withdraw.html" width="250" height="120"></iframe><br />	
+	<div id="menu">
+		<iframe src="create.html" width="225" height="120" class="ifo ifoa" ></iframe>
+		<iframe src="transfer.html" width="225" height="120" class="ifo ifob"></iframe><br />
+		<iframe src="deposit.html" width="225" height="120" class="ifo"></iframe>
+		<iframe src="withdraw.html" width="225" height="120" class="ifo"></iframe><br />
+	</div>
 	<hr />
 	<div id="BalanceView">
-		<button>Update BalanceTable View</button>
+		<button id="ref120">Update BalanceTable View</button>
+		<button id="ref10">Update upto 10 view</button>
+		<!-- <button id="freq10">Update upto 10 every 1 sec</button> --!>
 		<table id="BalanceTable">
 		<tr><th>AccountNo</th><th>Balance</th></tr>
 		</table>

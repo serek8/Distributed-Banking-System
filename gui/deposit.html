@@ -1,18 +1,18 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>jQuery.post demo</title>
-  <script src="https://code.jquery.com/jquery-1.10.2.js"></script>
-<style>html, body { border:0; margin:0; padding:10px; }body { font-family: 'Helvetica', 'Arial',  'Verdana', 'sans-serif'; }</style></head>
+	<meta charset="utf-8">
+	<title>DSbank - deposit</title>
+	<script src="https://code.jquery.com/jquery-1.10.2.js"></script>
+	<style>html, body { border:0; margin:0; padding:10px; }body { font-family: 'Helvetica', 'Arial',  'Verdana', 'sans-serif'; }</style></head>
 <body>
- 
+
 <form action="#" id="depositForm" method="POST">
   <input type="text" name="accountNumber" value="" placeholder="accountNumber">
   <input type="text" name="amount"  value="" placeholder="amount">
   <input type="submit" value="Deposit">
 </form>
-<!-- the result of the search will be rendered inside this div -->
+
 <div id="result"></div>
  
 <script>
@@ -41,7 +41,7 @@ $( "#depositForm" ).submit(function( event ) {
     dataType: 'json'
 }); 
  
-  // Put the results in a div
+  // Put the results in a div for errorreport
   posting.done(function( data ) {
     var content = $( data ).find( "#content" );
     $( "#result" ).empty().append( content );
