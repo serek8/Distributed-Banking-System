@@ -76,7 +76,7 @@ def balanceAccountRt(accountNumber):
 
 def sendTest(run, accr, accs):
 	while (balanceAccountRt(accs) != 60000):
-		print("waitAreceive" + str(accs))
+		print("waitAsend" + str(accs))
 		#time.sleep(0.1)
 	start = time.time()
 	print("start" + str(start))
@@ -126,9 +126,9 @@ while True:
 	print("\n\n\n\n\n\n\n\n\n")
 	print(time.ctime())
 	print("5")
-	if(mode="r"):
+	if(mode=="r"):
 		receiveTest(round,accountNumber,accountNumberDestination)
-	if(mode="r"):
+	if(mode=="s"):
 		sendTest(round,accountNumber,accountNumberDestination)
 	time.sleep(30)
 
