@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<title>DSbank - withdraw</title>
+	<script src="https://code.jquery.com/jquery-1.10.2.js"></script>
+	<style>html, body { border:0; margin:0; padding:10px; }body { font-family: 'Helvetica', 'Arial',  'Verdana', 'sans-serif'; }</style>
+</head>
+<body>
+ 
+<form action="#" id="transferForm" method="POST">
+  <input type="text" name="accountNumber" value="" placeholder="accountNumber">
+  <input type="text" name="accountNumberDestination" value="" placeholder="accountNumberDestination">
+  <input type="text" name="amount"  value="" placeholder="amount">
+  <input type="submit" value="Transfer">
+</form>
+
+<div id="result"></div>
+ 
+<script>
+window.onload = function() {
+// mount to form
+$( "#transferForm" ).submit(function( event ) {
+ 
+  // Stop form from submitting normally
+  event.preventDefault();
+ 
+  // Get some values from elements on the page:
+  var $form = $( this ),
+    amountInput = parseInt($form.find( "input[name='amount']" ).val()),
+    accountNumber = parseInt($form.find( "input[name='accountNumber']" ).val()),
+    accountNumberDestinationInput = $form.find( "input[name='accountNumberDestination']" ).val(),
+    url = "accounts/"+accountNumber+"/transfer";
+    //url = $form.attr( "action" );
+ 
+  // Send the data using post
+  var json = JSON.stringify({ amount: parseInt(amountInput), accountNumberDestination: accountNumberDestinationInput) })
+  var posting = $.ajax({
+    type: 'POST',
+    url: url,
+    data: json,
+    success: null,
+    contentType: "application/json",
+    dataType: 'json'
+}); 
+ 
+  // Put the results in a div for error report
+  posting.done(function( data ) {
+    var content = $( data ).find( "#content" );
+    $( "#result" ).empty().append( content );
+  });
+});
+};</script>
+ 
+</body>
+</html>
